@@ -1,0 +1,36 @@
+# macOS / Windows
+.DS_Store
+.AppleDouble
+._*
+Thumbs.db
+Desktop.ini
+
+# Local server and temporary output
+*.log
+*.pid
+*.tmp
+*.temp
+*~
+
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+
+# Dependencies and caches
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/
+coverage/
+
+# Development-only files
+/tests/
+/scripts/
+/upstream/
+/web-reference/
+
+# Keep dist/, LICENSE, README.md and package.json in Git.

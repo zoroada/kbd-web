@@ -1,0 +1,11 @@
+{
+  "name": "vial-studio",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 -m http.server 5173 --directory dist",
+    "start": "python3 -m http.server 5173 --directory dist",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "type": "module"
+}

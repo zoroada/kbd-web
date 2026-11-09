@@ -1,0 +1,47 @@
+# 第三方说明
+
+## Vial
+
+本项目包含依据 Vial 源码移植的协议逻辑及从 Vial 导出的键码、名称、分类和设置数据。
+
+- vial-gui：https://github.com/vial-kb/vial-gui
+- vial-web：https://github.com/vial-kb/vial-web
+- 许可证：GPL-2.0-or-later；完整许可证见 LICENSE.txt。
+- 原有源码中的 SPDX 和版权声明予以保留。
+
+## XZ 解压组件
+
+网页使用 dist/vendor/xz-decompress.js。该文件原始版权声明保留在文件开头：
+
+Based on xzwasm (c) Steve Sanderson. License: MIT
+https://github.com/SteveSanderson/xzwasm
+
+Contains xz-embedded by Lasse Collin and Igor Pavlov. License: Public domain
+https://tukaani.org/xz/embedded.html
+
+and walloc (c) 2020 Igalia, S.L. License: MIT
+https://github.com/wingo/walloc
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## 对应源码
+
+本网站的对应源码公开于 GitHub：https://github.com/zoroada/kbd-web 。仓库中的 dist/ 包含未压缩的 JavaScript、CSS、HTML 与配置数据；许可证和第三方说明一并保留。
