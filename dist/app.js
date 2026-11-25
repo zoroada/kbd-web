@@ -1,3 +1,5 @@
+import {parseVil,stringifyVil,vilToSnapshot,snapshotToVil} from './vil-file.js';
+import {saveFile} from './file-save.js';
 import {mountLighting} from './lighting.js';
 import {installUserKeycodes} from './user-keycodes.js';
 import {installMatrixInputGuard} from './matrix-input-guard.js';
@@ -14,14 +16,38 @@ const $=s=>document.querySelector(s), el=(tag,cls,text)=>{const e=document.creat
 let userKeys=[],bootDevice=null;
 let kb=null,previewDefinition=null,previewOptions=0,page=0,layer=0,selected=null,keydefs=[],codes={},macros=[],matrixTimer=null,matrixStart=null,testedKeys=new Set(),busy=false,settingsSchema,officialLabels={},encoderValues=new Map(),label=()=>'';
 const pages=[['⌘','按键映射'],['↻','旋钮'],['≋','宏'],['☼','灯光'],['♧','Tap Dance'],['⌗','组合键'],['⇄','按键覆盖'],['↪','替代重复键'],['⚙','QMK 设置'],['▦','布局与测试'],['◇','安全与配置']];
-function log(s){$('#log').textContent=`${new Date().toLocaleTimeString()} ${s}\n`+$('#log').textContent}function notice(s){$('#notice').textContent=s;log(s)}
+function log(s){$('#log').textContent=`${new Date().toLocaleTimeString()} ${s}\n`+$('#log').textContent}function notice(s){$('#notice').textContent=s;const local=$('#security-notice');if(local)local.textContent=s;log(s)}
 async function run(fn){if(busy)return;busy=true;document.body.setAttribute('aria-busy','true');try{await fn()}catch(e){notice('操作失败：'+e.message);console.error(e)}finally{busy=false;document.body.removeAttribute('aria-busy')}}
 function button(text,fn,cls=''){const b=el('button',cls,text);b.onclick=()=>run(fn);return b}let currentPaletteTab='Basic';let editorHost=null;function panel(title){const p=el('div','panel');if(title)p.append(el('h3','',title));(editorHost||$('#content')).append(p);return p}function field(parent,title,value,max=65535){const d=el('div','field'),i=el('input');i.type='number';i.min=0;i.max=max;i.value=value;d.append(el('label','',title),i);parent.append(d);return i}function select(parent,items,value){const s=el('select');items.forEach(([v,t])=>{const o=el('option','',t);o.value=v;s.append(o)});s.value=value;parent.append(s);return s}const hex=n=>'0x'+n.toString(16).padStart(4,'0');function parse(s){s=String(s).trim();if(s in codes)return codes[s];return integer(s)}
 async function loadCodes(){codes=await (await fetch(`keycodes-v${kb.version>=6?6:5}.json`)).json();officialLabels=await (await fetch('vial-labels.json')).json();userKeys=installUserKeycodes(codes,officialLabels,kb.definition);label=createLabeler(codes,officialLabels);keydefs=parseLayout(kb.definition);installDeviceCache(kb);testedKeys.clear();encoderValues.clear();selected=null;layer=0}
 function stopMatrix(){if(matrixTimer){clearInterval(matrixTimer);matrixTimer=null}}
 installMatrixInputGuard(window,()=>matrixTimer!==null);
-async function render(){stopMatrix();$('#disconnect').disabled=!kb;$('#bootloader').disabled=!kb;$('#content').replaceChildren();$('#crumb').textContent=pages[page][1];document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.page)===page));if(!kb&&previewDefinition){renderLayoutPreview();return}if(!kb){$('#title').textContent='连接键盘或加载布局 JSON';$('#subtitle').textContent='通过 USB 连接设备，或打开本地 JSON 预览布局。';document.body.classList.remove('device-ready');const p=panel();p.classList.add('empty');p.append(button('连接键盘',connect,'primary'));return}document.body.classList.add('device-ready');$('#title').textContent=kb.definition.name||'你的键盘工作台';$('#subtitle').textContent=`设备已连接 · 写入操作实时保存到键盘 · ${kb.rows} × ${kb.cols} 矩阵 · ${kb.layers} 层 · Vial ${kb.version}`;if(page===0)await keymap();else if(page===1)await encoders();else if(page===2)await entryOverview('Macro');else if(page===3)await lighting();else if(page===4||page===5)await entryOverview(page===4?'Tap Dance':'Combo');else if(page>=6&&page<=7)await dynamicUI(page-4);else if(page===8)await settings();else if(page===9)await layoutUI();else await security()}
-pages.forEach(([icon,name],i)=>{const b=button(`${icon}　${name}`,async()=>{page=i;await render()});if(![1,2,4,5,6,7].includes(i))$('nav').append(b);b.dataset.page=i});
+async function render(){stopMatrix();$('#disconnect').disabled=!kb;$('#bootloader').disabled=!kb;$('#device-safety').disabled=!kb;$('#security-button').disabled=false;if(!kb)$('#security-dialog')?.close();$('#content').replaceChildren();$('#crumb').textContent=pages[page][1];document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.page)===page));if(!kb&&previewDefinition){renderLayoutPreview();return}if(!kb){$('#title').textContent='连接键盘或加载布局 JSON';$('#subtitle').textContent='通过 USB 连接设备，或打开本地 JSON 预览布局。';document.body.classList.remove('device-ready');const p=panel();p.classList.add('empty');p.append(button('连接键盘',connect,'primary'));return}document.body.classList.add('device-ready');$('#title').textContent=kb.definition.name||'你的键盘工作台';$('#subtitle').textContent=`设备已连接 · 写入操作实时保存到键盘 · ${kb.rows} × ${kb.cols} 矩阵 · ${kb.layers} 层 · Vial ${kb.version}`;if(page===0)await keymap();else if(page===1)await encoders();else if(page===2)await entryOverview('Macro');else if(page===3)await lighting();else if(page===4||page===5)await entryOverview(page===4?'Tap Dance':'Combo');else if(page>=6&&page<=7)await dynamicUI(page-4);else if(page===8)await settings();else if(page===9)await layoutUI();else await security()}
+pages.forEach(([icon,name],i)=>{const b=button(`${icon}　${name}`,async()=>{page=i;await render()});if(![1,2,4,5,6,7,10].includes(i))$('nav').append(b);b.dataset.page=i});
+const securityButton=button('文件',openFileMenu);securityButton.id='security-button';securityButton.disabled=false;
+const headerStart=el('div','header-start'),crumb=$('header>span');crumb.before(headerStart);headerStart.append(crumb,securityButton);
+function openFileMenu(){return openSecurity()}
+function fileActions(parent){
+ const actions=el('div','file-actions');
+ const load=el('label','file-action','加载已保存配置…');load.htmlFor='vil-file';
+ const save=button('保存当前配置…',()=>saveFile(async()=>stringifyVil(snapshotToVil(await snapshot(),decodeMacro)),(kb.definition.name||'keyboard')+'.vil'),'file-action');save.disabled=!kb;
+ const json=el('label','file-action','加载 VIA JSON…');json.htmlFor='layout-file';
+ const definitions=button('下载 VIA 定义',()=>saveFile(async()=>{const response=await fetch('https://raw.githubusercontent.com/vial-kb/via-keymap-precompiled/main/via_keyboard_stack.json');if(!response.ok)throw Error('VIA 定义下载失败');return response.text()},'via_keyboard_stack.json'),'file-action');
+ const dummy=el('label','file-action','加载离线 JSON…');dummy.htmlFor='offline-json-file';
+ actions.append(load,save,json,definitions,dummy);parent.append(actions);
+}
+const safetyButton=button('◇　设备安全',openSecurity);safetyButton.id='device-safety';safetyButton.disabled=true;$('nav').append(safetyButton);
+async function openSecurity(){
+ const device=kb;
+ const existing=$('#security-dialog');if(existing?.open){existing.focus();return}
+ const dialog=el('dialog','security-dialog');dialog.id='security-dialog';
+ const head=el('div','security-dialog-header'),title=el('h2','','文件'),close=el('button','','关闭');title.id='security-dialog-title';dialog.setAttribute('aria-labelledby',title.id);head.append(title,close);
+ const feedback=el('p','security-feedback'),body=el('div','security-dialog-body');feedback.id='security-notice';feedback.setAttribute('role','status');
+ dialog.append(head,feedback,body);document.body.append(dialog);
+ const dismiss=()=>dialog.close();close.onclick=dismiss;dialog.addEventListener('close',()=>dialog.remove(),{once:true});
+ const refresh=async()=>{if(kb!==device||!dialog.isConnected){dismiss();return}body.replaceChildren();await security(body,refresh)};
+ dialog.showModal();try{await refresh()}catch(e){dismiss();throw e}
+}
 const bootButton=button('↥　进入 Boot 模式',rebootToBootloader);bootButton.id='bootloader';bootButton.disabled=true;$('nav').append(bootButton);
 async function rebootToBootloader(){
  const device=kb;if(!device)throw Error('请先连接键盘');stopMatrix();
@@ -56,6 +82,43 @@ async function disconnect(){
 }
 $('#disconnect').onclick=()=>run(disconnect);
 $('#connect').onclick=()=>run(connect);navigator.hid?.addEventListener('disconnect',e=>{if(kb?.t?.device===e.device){if(bootDevice===kb)return;stopMatrix();kb.t.dead=true;kb=null;$('#status').textContent='设备已断开';notice('设备已断开，请重新连接。');render()}});
+const vilInput=el('input','file-picker-input');vilInput.id='vil-file';vilInput.type='file';vilInput.accept='.vil,application/json';
+const vilLabel=el('label','file-picker','读取 .vil');vilLabel.htmlFor=vilInput.id;$('#layout-file').before(vilInput);
+vilInput.onclick=()=>{vilInput.value=''};
+vilInput.onchange=async()=>{
+ const file=vilInput.files[0];if(!file)return;
+ while(busy)await new Promise(resolve=>setTimeout(resolve,50));
+ await run(async()=>{if(file.size>4*1024*1024)throw Error('VIL 文件不能超过 4 MB');const data=parseVil(await file.text());await showVilFile(data,file.name)});
+};
+async function showVilFile(data,name){
+ const dialog=el('dialog','vil-file-dialog'),head=el('div','key-picker-header'),title=el('strong','',name),close=el('button','','关闭');head.append(title,close);
+ dialog.append(head,el('p','muted',`${data.layout.length} 层 · ${data.layout[0].length} × ${data.layout[0][0].length} 矩阵 · ${(data.macro||[]).length} 个宏`));
+ const layerChoice=select(dialog,data.layout.map((_,i)=>[i,'Layer '+i]),0),matrix=el('div','vil-matrix');dialog.append(matrix);
+ const draw=()=>{matrix.replaceChildren();for(const row of data.layout[Number(layerChoice.value)]){const line=el('div','vil-matrix-row');row.forEach(code=>line.append(el('span','',String(code))));matrix.append(line)}};layerChoice.onchange=draw;draw();
+ const details=el('details'),summary=el('summary','','完整配置'),text=el('textarea');text.readOnly=true;text.value=stringifyVil(data);details.append(summary,text);dialog.append(details);
+ const actions=el('div','actions'),save=button('另存为 .vil',()=>saveFile(()=>stringifyVil(data),name));actions.append(save);
+ const device=kb;
+ if(device)actions.append(button('导入当前键盘',async()=>{
+  if(kb!==device)throw Error('键盘连接已变化，请重新读取文件');
+  if(!confirm('将此 VIL 配置写入当前键盘？'))return;
+  const baseline=await snapshot();const next=vilToSnapshot(data,baseline,codes,encodeMacro);validateSnapshot(next);await restore(next);
+  dialog.close();dialog.remove();await loadCodes();await render();notice('VIL 配置已导入键盘。');
+ },'primary'));
+ else dialog.append(el('p','muted','当前为文件预览；连接对应键盘后重新读取，可将配置导入设备。VIL 不包含物理布局，以上按矩阵位置显示。'));
+ dialog.append(actions);document.body.append(dialog);close.onclick=()=>{dialog.close();dialog.remove()};dialog.addEventListener('cancel',()=>dialog.remove(),{once:true});dialog.showModal();
+}
+const offlineJSON=el('input','file-picker-input');offlineJSON.id='offline-json-file';offlineJSON.type='file';offlineJSON.accept='.json,application/json';document.body.append(offlineJSON);
+offlineJSON.onclick=()=>{offlineJSON.value=''};
+offlineJSON.onchange=async()=>{const file=offlineJSON.files[0];if(!file)return;while(busy)await new Promise(r=>setTimeout(r,50));await run(async()=>{
+ if(file.size>4*1024*1024)throw Error('JSON 文件不能超过 4 MB');
+ const definition=parseLayoutFile(await file.text()),dialog=el('dialog','vil-file-dialog'),head=el('div','security-dialog-header'),close=el('button','','关闭');head.append(el('h2','',definition.name||file.name),close);dialog.append(head);
+ dialog.append(el('p','muted','离线布局预览'));
+ const saved=[previewDefinition,keydefs,previewOptions];
+ try{previewDefinition=definition;keydefs=parseLayout(definition);previewOptions=0;drawBoard(dialog,false,true)}finally{[previewDefinition,keydefs,previewOptions]=saved}
+ dialog.querySelectorAll('.key,.encoder-key').forEach(b=>{b.onclick=null;b.tabIndex=-1});
+ close.onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove(),{once:true});document.body.append(dialog);dialog.showModal();
+})};
+$('header label[for="layout-file"]')?.remove();
 const layoutFile=$('#layout-file');
 function layoutPickerLabel(){const label=el('label','file-picker','加载布局 JSON');label.htmlFor='layout-file';return label}
 layoutFile.onclick=()=>{layoutFile.value=''};
@@ -201,14 +264,14 @@ const dynamicNames=[['轻点','长按','双击','双击后长按','判定时间�
 async function dynamicUI(type,initialIndex=0){
  const p=panel(['Tap Dance','Combo','Key Override','Alt Repeat Key'][type]);if(!kb.counts[type]){p.append(el('p','','当前固件未提供此功能。'));return}
  const s=select(p,Array.from({length:kb.counts[type]},(_,i)=>[i,String(i)]),initialIndex);s.setAttribute('aria-label','编号');const body=el('div');p.append(body);
- async function load(){body.replaceChildren();const values=await kb.dynamic(type,Number(s.value));
-  if(type===2||type===3){const read=buildAdvancedEntry(body,type,values,{keyButton:keyPickerButton});body.append(button('保存',async()=>{await kb.dynamic(type,Number(s.value),read());notice('配置已保存');if($('#modal').open)$('#modal').close()},'primary'));return}
+ async function load(reset=false){const index=Number(s.value);const values=reset?[[0,0,0,0,200],[0,0,0,0,0],[0,0,0,0,0,0,0],[0,0,0,0]][type].slice():[...await kb.dynamic(type,index)];body.replaceChildren();
+  if(type===2||type===3){const read=buildAdvancedEntry(body,type,values,{keyButton:keyPickerButton});const actions=el('div','actions');actions.append(button('重置',()=>load(true)),button('保存',async()=>{await kb.dynamic(type,Number(s.value),read());notice('配置已保存');if($('#modal').open)$('#modal').close()},'primary'));body.append(actions);return}
   const inputs=values.map((value,i)=>{
    const isKey=type===0?i<4:type===1?true:i<2;
    if(!isKey)return field(body,dynamicNames[type][i],value,(type===2&&i>=3||type===3&&i>=2)?255:65535);
    const row=el('div','field'),name=dynamicNames[type][i],key=keyPickerButton(value,null,name);row.append(el('label','',name),key);body.append(row);return key;
   });
-  body.append(button('保存',async()=>{await kb.dynamic(type,Number(s.value),inputs.map((input,i)=>integer(input.value,(type===2&&i>=3||type===3&&i>=2)?255:65535)));notice('配置已保存');if($('#modal').open)$('#modal').close()},'primary'));
+  const actions=el('div','actions');actions.append(button('重置',()=>load(true)),button('保存',async()=>{await kb.dynamic(type,Number(s.value),inputs.map((input,i)=>integer(input.value,(type===2&&i>=3||type===3&&i>=2)?255:65535)));notice('配置已保存');if($('#modal').open)$('#modal').close()},'primary'));body.append(actions);
  }
  s.onchange=()=>run(load);await load();
 }
@@ -237,7 +300,7 @@ async function macroUI(initialIndex=0){
  });
  const add=button('+ 添加动作',()=>{actions.push({type:'text',value:''});draw()});
  const enter=button('轻点 Enter',()=>{actions.push({type:'tap',value:hex(codes.KC_ENTER??40)});draw()});
- const revert=button('还原',()=>{drafts.delete(index);actions=decodeMacro(macros[index]);draw()});
+ const revert=button('重置',()=>{actions=[];draw()});
  const save=button('保存',async()=>{
   if((await kb.vial(5))[0]!==1)throw Error('请先在安全页面完成物理解锁');
   drafts.set(index,actions);const next=macros.map((m,i)=>drafts.has(i)?encodeMacro(drafts.get(i)):[...m]);
@@ -276,8 +339,29 @@ async function layoutUI(){
  };
  const actions=el('div','actions');actions.append(button('开始测试',matrixStart),button('停止测试',()=>{stopMatrix();clearPressed();notice('测试已停止，已测试记录保留。')}),button('清除测试记录',()=>{testedKeys.clear();q.querySelectorAll('.key').forEach(b=>b.classList.remove('tested'));notice('测试记录已清除。')}));q.append(actions);
 }
-async function security(){const p=panel('安全锁');const s=await kb.vial(5);p.append(el('p','',s[0]===1?'设备当前已解锁':'设备当前已锁定'));const coords=[];for(let i=2;i<32;i+=2)if(s[i]!==255&&s[i+1]!==255)coords.push(`${s[i]},${s[i+1]}`);p.append(el('p','muted','物理解锁需持续按住矩阵位置：'+(coords.join('、')||'无')));p.append(button('开始物理解锁',async()=>{await kb.vial(6);notice('请持续按住上述物理按键。');for(let i=0;i<150;i++){const a=await kb.vial(7);if(a[0]===1){notice('解锁成功');await render();return}await new Promise(r=>setTimeout(r,200))}throw Error('解锁等待超时，请重新尝试')}),button('锁定设备',async()=>{await kb.vial(8);notice('设备已锁定');await render()}));const q=panel('备份与恢复');q.append(el('p','muted','导出本工具的完整数值配置，包括所有层、旋钮、宏、动态条目和支持的 QMK 设置。恢复前会检查设备 UID 与矩阵尺寸；写入过程中请勿断开。'));q.append(button('导出配置',async()=>{const data=await snapshot();download(data)},'primary'));const input=el('input');input.type='file';input.accept='.json';q.append(input,button('恢复配置',async()=>{if(!input.files.length)throw Error('请选择备份文件');const data=JSON.parse(await input.files[0].text());validateSnapshot(data);if(!confirm('将备份写入设备？此操作会覆盖当前配置。'))return;await restore(data);notice('备份已恢复');await render()}));q.append(el('p','muted','此格式为 Vial Studio 数值备份，并非原版 .vil 格式。'));const d=panel('设备与协议');d.append(el('p','',`UID ${kb.uid} · VIA ${kb.via} · Vial ${kb.version}`));d.append(button('导出设备定义 JSON',()=>download(kb.definition,'vial-definition.json')));d.append(el('p','muted','进入 Boot 模式后，请使用对应固件工具刷写。'))}
-function download(data,name='vial-studio-backup.json'){const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=el('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+async function security(host=null,refresh=render){
+ const device=kb;
+ const securityPanel=title=>{if(!host)return panel(title);const box=el('div','panel');box.append(el('h3','',title));host.append(box);return box};
+ const lock=securityPanel('安全锁'),status=el('p','',device?'正在读取安全锁状态…':'设备未连接'),positions=el('p','muted',device?'':'连接键盘后可查看物理解锁按键。');lock.append(status,positions);
+ const requireDevice=()=>{if(!device||kb!==device)throw Error('请先连接键盘')};
+ const unlock=button('开始物理解锁',async()=>{
+  requireDevice();await device.vial(6);notice('请持续按住上述物理按键。');
+  for(let i=0;i<150;i++){requireDevice();const value=await device.vial(7);if(value[0]===1){notice('解锁成功');await refresh();return}await new Promise(resolve=>setTimeout(resolve,200))}
+  throw Error('解锁等待超时，请重新尝试');
+ }),setLock=button('锁定设备',async()=>{requireDevice();await device.vial(8);notice('设备已锁定');await refresh()});
+ unlock.disabled=setLock.disabled=!device;lock.append(unlock,setLock);
+ fileActions(securityPanel('备份与恢复'));
+ const protocol=securityPanel('设备与协议');protocol.append(el('p','',device?`UID ${device.uid} · VIA ${device.via} · Vial ${device.version}`:'设备未连接'));
+ const exportDefinition=button('导出设备定义 JSON',()=>{requireDevice();return download(device.definition,'vial-definition.json')});exportDefinition.disabled=!device;protocol.append(exportDefinition,el('p','muted','进入 Boot 模式后，请使用对应固件工具刷写。'));
+ if(device){try{
+  const value=await device.vial(5);if(kb!==device)return;
+  status.textContent=value[0]===1?'设备当前已解锁':'设备当前已锁定';const coords=[];
+  for(let i=2;i<32;i+=2)if(value[i]!==255&&value[i+1]!==255)coords.push(`${value[i]},${value[i+1]}`);
+  positions.textContent='物理解锁需持续按住矩阵位置：'+(coords.join('、')||'无');
+ }catch(e){status.textContent='安全锁状态读取失败：'+e.message}}
+}
+function parseVilOrBackup(text){const data=JSON.parse(text.replace(/^\uFEFF/,''));return data.format==='vial-studio-1'?data:parseVil(text)}
+function download(data,name='vial-studio-backup.json'){return saveFile(()=>data,name)}
 async function snapshot(){const data={format:'vial-studio-1',uid:kb.uid,rows:kb.rows,cols:kb.cols,layers:kb.layers,version:kb.version,keymap:Array.from(kb.keymap),layoutOptions:kb.layoutOptions,macros:await kb.macros(),dynamic:[],encoders:[],settings:{}};for(let t=0;t<4;t++){const entries=[];for(let i=0;i<kb.counts[t];i++)entries.push(await kb.dynamic(t,i));data.dynamic.push(entries)}for(const id of [...new Set(keydefs.filter(k=>k.encoder).map(k=>k.row))])for(let l=0;l<kb.layers;l++)data.encoders.push([l,id,await kb.encoder(l,id)]);const schema=await (await fetch('qmk_settings.json')).json(),supported=new Set(await kb.supportedSettings()),widths={};for(const tab of schema.tabs)for(const f of tab.fields)if(supported.has(f.qsid))widths[f.qsid]=f.width||1;for(const [id,w] of Object.entries(widths))data.settings[id]=[w,await kb.setting(Number(id),w)];return data}
 function validateSnapshot(d){if(d.format!=='vial-studio-1'||d.uid!==kb.uid||d.rows!==kb.rows||d.cols!==kb.cols||d.layers!==kb.layers||d.version!==kb.version)throw Error('备份的设备、协议版本或矩阵不匹配');if(!Array.isArray(d.keymap)||d.keymap.length!==kb.keymap.length)throw Error('键位数据长度不匹配');d.keymap.forEach(x=>integer(x,255));if(!Array.isArray(d.macros)||!Array.isArray(d.dynamic)||d.dynamic.length!==4||!Array.isArray(d.encoders)||typeof d.settings!=='object')throw Error('备份字段不完整');d.macros.forEach(a=>{if(!Array.isArray(a))throw Error('宏结构错误');a.forEach(x=>{integer(x,255);if(!x)throw Error('宏内容不能包含终止符')})});for(const e of d.encoders){if(!Array.isArray(e)||e.length!==3||!Array.isArray(e[2])||e[2].length!==2)throw Error('旋钮结构错误');integer(e[0],kb.layers-1);integer(e[1],255);e[2].forEach(x=>integer(x))}for(const [id,v] of Object.entries(d.settings)){integer(id);if(!Array.isArray(v)||v.length!==2||![1,2,4].includes(v[0]))throw Error('设置字段错误');integer(v[1],2**(v[0]*8)-1)}d.dynamic.forEach((a,t)=>{if(a.length!==kb.counts[t])throw Error('动态条目数量不匹配');a.forEach(v=>{if(v.length!==[5,5,7,4][t])throw Error('动态字段数量不匹配');v.forEach((x,i)=>integer(x,(t===2&&i>=3||t===3&&i>=2)?255:65535))})});integer(d.layoutOptions,4294967295)}
 async function restore(d){await kb.macros();if(d.macros.length!==kb.macroCount||d.macros.flatMap(a=>[...a,0]).length>kb.macroSize)throw Error('宏数量或容量不匹配');if((await kb.vial(5))[0]!==1)throw Error('恢复前请先解锁设备');for(let l=0;l<kb.layers;l++)for(let r=0;r<kb.rows;r++)for(let c=0;c<kb.cols;c++){const i=((l*kb.rows+r)*kb.cols+c)*2,n=d.keymap[i]*256+d.keymap[i+1];if(n!==kb.code(l,r,c))await kb.setKey(l,r,c,n)}for(const [l,id,v] of d.encoders)for(let dir=0;dir<2;dir++)await kb.setEncoder(l,id,dir,v[dir]);await kb.setOptions(d.layoutOptions);await kb.saveMacros(d.macros);for(let t=0;t<4;t++)for(let i=0;i<d.dynamic[t].length;i++)await kb.dynamic(t,i,d.dynamic[t][i]);for(const [id,[w,v]] of Object.entries(d.settings))await kb.setting(Number(id),w,v)}

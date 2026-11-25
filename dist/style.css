@@ -125,3 +125,31 @@ dialog.key-picker-dialog{height:min(86vh,720px)}dialog.key-picker-dialog[open]{d
 @media(max-width:600px){#modal.macro-editor .macro-action{grid-template-columns:68px 88px minmax(0,1fr) 26px}}
 
 .release-links{font-size:11px;line-height:1.7}.release-links a{color:#718096;text-decoration:none}.release-links a:hover{color:#2563eb;text-decoration:underline}
+
+.vil-file-dialog{width:min(94vw,1100px);max-width:1100px;max-height:88vh;overflow:auto}
+.vil-matrix{overflow:auto;margin:14px 0;padding:10px;background:#edf0f5;border-radius:8px}
+.vil-matrix-row{display:flex;gap:5px;margin-bottom:5px;width:max-content}.vil-matrix-row span{display:flex;align-items:center;justify-content:center;min-width:75px;min-height:42px;padding:5px;background:white;border:1px solid #d5deeb;border-radius:5px;font-size:11px;white-space:pre-wrap}
+.vil-file-dialog details{margin-top:16px}.vil-file-dialog textarea{height:220px;font-size:12px}
+header>div{flex-wrap:wrap}
+
+header .header-start{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+#security-button{white-space:nowrap}
+.security-dialog{width:min(94vw,960px);max-width:960px;max-height:88vh;padding:20px;background:#f5f7fb;overflow:auto}
+.security-dialog-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.security-dialog-header h2{font-size:20px;margin:0}
+.security-dialog .panel{padding:18px}.security-dialog .panel:last-child{margin-bottom:0}
+.security-dialog .panel>h3{margin-top:0}
+.security-dialog .panel>button,.security-dialog .panel>input{margin:3px 6px 3px 0}
+.security-dialog input[type=file]{max-width:100%}
+.security-feedback{margin:0 0 12px;border-radius:7px;color:#43648a;background:#edf5ff;padding:8px 12px;font-size:12px}
+.security-feedback:empty{display:none}
+@media(max-width:600px){.security-dialog{padding:12px}.security-dialog .panel{padding:12px}header .header-start{gap:10px}}
+
+.file-menu-dialog{width:min(92vw,390px);max-width:390px;padding:16px}
+.file-menu-dialog .security-dialog-header{margin-bottom:8px}
+.file-menu-item{display:block;width:100%;padding:11px 12px;text-align:left;border:0;border-radius:6px;background:transparent;color:#35425a;font:14px/1.4 inherit;cursor:pointer}
+.file-menu-item:hover{background:#edf5ff;color:#2563eb}.file-menu-dialog hr{border:0;border-top:1px solid #e0e5ee;margin:8px 0}
+
+.file-actions{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 4px}
+.file-action{display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border:1px solid #dce2ec;border-radius:8px;background:#fff;color:#526177;font:inherit;cursor:pointer;white-space:nowrap}
+.file-action:hover{background:#edf5ff;border-color:#60a5fa;color:#2563eb}
