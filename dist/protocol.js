@@ -15,6 +15,8 @@ export class Transport {
    if(a.length!==32||!this.pending)return;
    const p=this.pending;
    // VIA responses echo the command; buffer replies also echo offset and length.
+   if([0x14,0x15].includes(p.bytes[0])&&a[0]===255){this.pending=null;p.resolve(a);return}
+   if([0x14,0x15].includes(p.bytes[0])&&(a[1]!==p.bytes[1]||a[2]!==p.bytes[2]||(p.bytes[2]===4&&[3,4,5].some(i=>a[i]!==p.bytes[i]))||(p.bytes[2]===6&&[3,4].some(i=>a[i]!==p.bytes[i]))))return;
    if(p.bytes[0]!==254&&(a[0]!==p.bytes[0]||([14,18].includes(a[0])&&[1,2,3].some(i=>a[i]!==p.bytes[i]))))return;
    this.pending=null;p.resolve(a);
   });
@@ -29,18 +31,18 @@ export class Transport {
   this.queue=task.catch(()=>{});return task;
  }
  async drain(){let remaining=this.quiet;const start=Date.now();while(remaining>0){await new Promise(r=>setTimeout(r,remaining));remaining=this.quiet-(Date.now()-Math.max(start,this.lastInput));if(Date.now()-start>3000)throw Error('设备持续发送迟到响应，请重新连接')}}
- retrySafe(bytes){return [1,2,4,5,7,8,9,12,13,14,15,17,18].includes(bytes[0])||(bytes[0]===254&&[0,1,2,3,4,5,9,10,11,13].includes(bytes[1]))}
+ retrySafe(bytes){if(bytes[0]===0x14)return false;if(bytes[0]===0x15)return true;return [1,2,4,5,7,8,9,12,13,14,15,17,18].includes(bytes[0])||(bytes[0]===254&&[0,1,2,3,4,5,9,10,11,13].includes(bytes[1]))}
  async attempt(packet,bytes){return new Promise((resolve,reject)=>{
   const timer=setTimeout(()=>{this.pending=null;const e=Error('设备响应超时');e.timeout=true;reject(e)},this.timeout);
   this.pending={bytes,resolve:a=>{clearTimeout(timer);resolve(a)}};
   this.device.sendReport(this.report,packet).catch(e=>{clearTimeout(timer);this.pending=null;reject(e)});
  })}
- send(bytes){const task=this.queue.then(async()=>{
+ send(bytes,{retry=true}={}){const task=this.queue.then(async()=>{
   if(this.dead||this.device.opened===false)throw Error('USB 设备已断开，请重新连接');
   if(bytes.length>32)throw Error('数据包超出 32 字节');
   const packet=new Uint8Array(32);packet.set(bytes);
   if(this.recover){await this.drain();this.recover=false}
-  const count=this.retrySafe(bytes)?this.retries+1:1;
+  const count=retry&&this.retrySafe(bytes)?this.retries+1:1;
   for(let i=0;i<count;i++){
    try{const a=await this.attempt(packet,bytes);if(i)await this.drain();return a}
    catch(e){if(!e.timeout){if(this.device.opened===false)this.dead=true;throw e}

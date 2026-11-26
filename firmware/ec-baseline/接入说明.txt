@@ -1,0 +1,63 @@
+基准 ADC 精简接口
+
+1. 用 ec_baseline_via.c 替换原来的 EC VIA 命令实现，不能同时编译两个
+   via_custom_value_command_kb。保留原文件 Copyright / GPL 声明。
+   原文件内 ec_rescale_values、ec_save_threshold_data 等函数会被移除；
+   全工程搜索其调用。如有其他文件调用，需将对应计算逻辑保留在矩阵模块。
+
+2. 在 ec_switch_matrix.h 的 eeprom_ec_config_t 末尾追加：
+
+    int16_t baseline_adc[MATRIX_ROWS][MATRIX_COLS];
+    uint32_t baseline_magic;
+
+   在头文件中添加声明（仅 VIA_ENABLE 时使用）：
+
+    bool ec_baseline_restore(void);
+
+   或直接包含配套头文件 ec_baseline_via.h。
+   可直接调用 ec_baseline_read(row, col, &value) 读取 int16_t 基准；
+   ec_baseline_save() 将当前整张基准矩阵保存到配置存储。
+
+   EECONFIG_KB_DATA_SIZE 必须同步增加：
+       2 * MATRIX_ROWS * MATRIX_COLS + 4 字节。
+   同时检查 EEPROM/Flash 数据块容量。保留现有 _Static_assert。
+   不要将基准存进 bottoming_reading，两个字段含义不同。
+
+3. 修改默认配置初始化：
+    eeprom_ec_config.baseline_magic = 0;
+    memset(eeprom_ec_config.baseline_adc, 0,
+           sizeof(eeprom_ec_config.baseline_adc));
+
+   更新 EEPROM 布局版本，或在刷入新固件后初始化配置一次。
+   旧数据布局不能直接当作新布局读取，否则新增字段会是无效数据。
+   初始化会影响现有配置，应先备份。
+
+4. 启动时，加载完整 EEPROM 数据块、完成原来的自动基准采集后调用：
+
+    ec_baseline_restore();
+
+   必须放在最后一次 ec_noise_floor() 之后，否则保存值会被覆盖。
+   无有效保存标记时返回 false，保留启动采样结果。
+
+5. 这个文件只采集、读取、持久化基准，不修改触发/释放算法。
+   若矩阵扫描使用缓存的 rescaled_mode_0_* 阈值，校准以及恢复基准后
+   仍须由矩阵模块更新这些阈值，否则触发行为不会随基准改变。
+   “基准 + 统一偏移”的新算法需要在 ec_switch_matrix.c 配套实现。
+
+USB 协议（每包 32 字节，不足补零，通道 0）：
+- 读取能力：08 00 0E
+  回复字节 3=行数、4=列数、5=协议版本1、6=有符号16位标记1。
+- 读取每键基准：08 00 0C 行 列
+  回复字节5、6为大端 int16，网页需按有符号值解码。
+- 重新采集基准：07 00 09 00
+  用户必须松开所有按键。应答字节3=0表示处理完成。
+- 保存当前基准：07 00 0D 00
+  保存到现有键盘配置块，应答字节3=0表示保存函数已返回。
+  底层存储函数没有返回错误码，此应答不能确认 Flash 硬件写入成功。
+- 不支持的指令：回复字节0=id_unhandled。
+
+读取不会触发校准或 Flash 写入；校准不会自动保存。
+校准和保存命令不可自动重传；超时后先读取状态/数值确认。
+没有添加独立 raw_hid_send：沿用原 VIA 框架的应答路径。
+
+尚未在完整固件工程编译或实机验证。当前网页也还未接入新增读取及保存指令。

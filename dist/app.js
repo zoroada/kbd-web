@@ -1,3 +1,4 @@
+import {mountEcCalibration} from './ec-calibration.js?v=ec-offset-limits-19';
 import {parseVil,stringifyVil,vilToSnapshot,snapshotToVil} from './vil-file.js';
 import {saveFile} from './file-save.js';
 import {mountLighting} from './lighting.js';
@@ -11,18 +12,18 @@ import {parseLayout,keyShape,layoutBounds,parseLayoutFile,layoutChoices,changeLa
 import {mountPalette} from './palette.js?v=modifier-template-2';
 // SPDX-License-Identifier: GPL-2.0-or-later
 import {createLabeler,encoderDirection} from './key-labels.js';
-import {Transport,Keyboard,integer,u16,read16} from './protocol.js?v=bootloader-1';
+import {Transport,Keyboard,integer,u16,read16} from './protocol.js?v=ec-live-26-11';
 const $=s=>document.querySelector(s), el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e};
 let userKeys=[],bootDevice=null;
 let kb=null,previewDefinition=null,previewOptions=0,page=0,layer=0,selected=null,keydefs=[],codes={},macros=[],matrixTimer=null,matrixStart=null,testedKeys=new Set(),busy=false,settingsSchema,officialLabels={},encoderValues=new Map(),label=()=>'';
-const pages=[['⌘','按键映射'],['↻','旋钮'],['≋','宏'],['☼','灯光'],['♧','Tap Dance'],['⌗','组合键'],['⇄','按键覆盖'],['↪','替代重复键'],['⚙','QMK 设置'],['▦','布局与测试'],['◇','安全与配置']];
+const pages=[['⌘','按键映射'],['↻','旋钮'],['≋','宏'],['☼','灯光'],['♧','Tap Dance'],['⌗','组合键'],['⇄','按键覆盖'],['↪','替代重复键'],['⚙','QMK 设置'],['▦','布局与测试'],['◇','安全与配置'],['◉','静电容校准']];
 function log(s){$('#log').textContent=`${new Date().toLocaleTimeString()} ${s}\n`+$('#log').textContent}function notice(s){$('#notice').textContent=s;const local=$('#security-notice');if(local)local.textContent=s;log(s)}
 async function run(fn){if(busy)return;busy=true;document.body.setAttribute('aria-busy','true');try{await fn()}catch(e){notice('操作失败：'+e.message);console.error(e)}finally{busy=false;document.body.removeAttribute('aria-busy')}}
 function button(text,fn,cls=''){const b=el('button',cls,text);b.onclick=()=>run(fn);return b}let currentPaletteTab='Basic';let editorHost=null;function panel(title){const p=el('div','panel');if(title)p.append(el('h3','',title));(editorHost||$('#content')).append(p);return p}function field(parent,title,value,max=65535){const d=el('div','field'),i=el('input');i.type='number';i.min=0;i.max=max;i.value=value;d.append(el('label','',title),i);parent.append(d);return i}function select(parent,items,value){const s=el('select');items.forEach(([v,t])=>{const o=el('option','',t);o.value=v;s.append(o)});s.value=value;parent.append(s);return s}const hex=n=>'0x'+n.toString(16).padStart(4,'0');function parse(s){s=String(s).trim();if(s in codes)return codes[s];return integer(s)}
 async function loadCodes(){codes=await (await fetch(`keycodes-v${kb.version>=6?6:5}.json`)).json();officialLabels=await (await fetch('vial-labels.json')).json();userKeys=installUserKeycodes(codes,officialLabels,kb.definition);label=createLabeler(codes,officialLabels);keydefs=parseLayout(kb.definition);installDeviceCache(kb);testedKeys.clear();encoderValues.clear();selected=null;layer=0}
 function stopMatrix(){if(matrixTimer){clearInterval(matrixTimer);matrixTimer=null}}
 installMatrixInputGuard(window,()=>matrixTimer!==null);
-async function render(){stopMatrix();$('#disconnect').disabled=!kb;$('#bootloader').disabled=!kb;$('#device-safety').disabled=!kb;$('#security-button').disabled=false;if(!kb)$('#security-dialog')?.close();$('#content').replaceChildren();$('#crumb').textContent=pages[page][1];document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.page)===page));if(!kb&&previewDefinition){renderLayoutPreview();return}if(!kb){$('#title').textContent='连接键盘或加载布局 JSON';$('#subtitle').textContent='通过 USB 连接设备，或打开本地 JSON 预览布局。';document.body.classList.remove('device-ready');const p=panel();p.classList.add('empty');p.append(button('连接键盘',connect,'primary'));return}document.body.classList.add('device-ready');$('#title').textContent=kb.definition.name||'你的键盘工作台';$('#subtitle').textContent=`设备已连接 · 写入操作实时保存到键盘 · ${kb.rows} × ${kb.cols} 矩阵 · ${kb.layers} 层 · Vial ${kb.version}`;if(page===0)await keymap();else if(page===1)await encoders();else if(page===2)await entryOverview('Macro');else if(page===3)await lighting();else if(page===4||page===5)await entryOverview(page===4?'Tap Dance':'Combo');else if(page>=6&&page<=7)await dynamicUI(page-4);else if(page===8)await settings();else if(page===9)await layoutUI();else await security()}
+async function render(){stopMatrix();$('#disconnect').disabled=!kb;$('#bootloader').disabled=!kb;$('#device-safety').disabled=!kb;$('#security-button').disabled=false;if(!kb)$('#security-dialog')?.close();$('#content').replaceChildren();$('#crumb').textContent=pages[page][1];document.querySelectorAll('nav button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.page)===page));if(!kb&&previewDefinition){renderLayoutPreview();return}if(!kb){$('#title').textContent='连接键盘或加载布局 JSON';$('#subtitle').textContent='通过 USB 连接设备，或打开本地 JSON 预览布局。';document.body.classList.remove('device-ready');const p=panel();p.classList.add('empty');p.append(button('连接键盘',connect,'primary'));return}document.body.classList.add('device-ready');$('#title').textContent=kb.definition.name||'你的键盘工作台';$('#subtitle').textContent=`设备已连接 · 写入操作实时保存到键盘 · ${kb.rows} × ${kb.cols} 矩阵 · ${kb.layers} 层 · Vial ${kb.version}`;if(page===0)await keymap();else if(page===1)await encoders();else if(page===2)await entryOverview('Macro');else if(page===3)await lighting();else if(page===4||page===5)await entryOverview(page===4?'Tap Dance':'Combo');else if(page>=6&&page<=7)await dynamicUI(page-4);else if(page===8)await settings();else if(page===9)await layoutUI();else if(page===11)await mountEcCalibration($('#content'),kb,{run,notice});else await security()}
 pages.forEach(([icon,name],i)=>{const b=button(`${icon}　${name}`,async()=>{page=i;await render()});if(![1,2,4,5,6,7,10].includes(i))$('nav').append(b);b.dataset.page=i});
 const securityButton=button('文件',openFileMenu);securityButton.id='security-button';securityButton.disabled=false;
 const headerStart=el('div','header-start'),crumb=$('header>span');crumb.before(headerStart);headerStart.append(crumb,securityButton);
@@ -174,7 +175,7 @@ function drawModifierLegend(button,code,k){
  base.onclick=event=>{event.stopPropagation();run(()=>openKeyPicker(code&255,async value=>{if(value>255){notice('请选择基础按键');return}selected=k;await applyCode((code&0xff00)|value)},'选择基础按键',{basicOnly:true}))};
  host.append(base);button.classList.add('modifier-key');
 }
-function drawBoard(p,test=false,preview=false){
+function drawBoard(p,test=false,preview=false,adc=false){
  const wrap=el('div','boardWrap'),board=el('div','keyboard');
  const definition=preview?previewDefinition:kb.definition;
  const defs=visibleLayout(keydefs,definition.layouts.labels||[],preview?previewOptions:kb.layoutOptions).filter(k=>test?!k.encoder:true),bounds=layoutBounds(defs),unit=test?51:61.2,keyGap=test?5:6;
@@ -185,9 +186,10 @@ function drawBoard(p,test=false,preview=false){
   const code=preview?undefined:k.encoder?encoderValues.get(k.row)?.[k.col]:kb.code(layer,k.row,k.col);
   const b=el('button',k.encoder?'encoder-key layout-encoder':'key');
   if(k.encoder){b.append(el('span','encoder-legend',preview?`E${k.row+1}`:code===undefined?'…':label(code)),el('span','encoder-direction',encoderDirection(k.col)));b.dataset.encoder=k.row;b.dataset.direction=k.col;b.setAttribute('aria-label',`旋钮 ${k.row+1} ${encoderDirection(k.col)} ${code===undefined?'':label(code).replaceAll('\n',' ')}`)}
-  else{if(test&&testedKeys.has(`${k.row},${k.col}`))b.classList.add('tested');b.textContent=preview?(previewDefinition?.previewLabels?.[`${k.row},${k.col}`]??`${k.row},${k.col}`):label(code);b.dataset.coord=k.row+','+k.col}
+  else{if(test&&!adc&&testedKeys.has(`${k.row},${k.col}`))b.classList.add('tested');b.textContent=adc?'—':preview?(previewDefinition?.previewLabels?.[`${k.row},${k.col}`]??`${k.row},${k.col}`):label(code);b.dataset.coord=k.row+','+k.col}
   if(selected&&!!selected.encoder===!!k.encoder&&selected.row===k.row&&selected.col===k.col)b.classList.add('selected');
-  b.title=k.encoder?`旋钮 ${k.row+1} · ${encoderDirection(k.col)} · JSON (${k.x}, ${k.y})`:`矩阵 ${k.row},${k.col} · ${preview?'布局位置':hex(code)}`;
+  if(adc){b.classList.add('adc-key');b.setAttribute('aria-label',`矩阵 ${k.row},${k.col}，ADC 未读取`)}
+  b.title=adc?`矩阵 ${k.row},${k.col} · ADC 未读取`:k.encoder?`旋钮 ${k.row+1} · ${encoderDirection(k.col)} · JSON (${k.x}, ${k.y})`:`矩阵 ${k.row},${k.col} · ${preview?'布局位置':hex(code)}`;
   Object.assign(b.style,{left:(k.x-bounds.minX)*unit+'px',top:(k.y-bounds.minY)*unit+'px',width:k.w*unit-keyGap+'px',height:k.h*unit-keyGap+'px'});
   const shape=keyShape(k,unit,keyGap);
   if(!k.encoder&&shape.compound){
